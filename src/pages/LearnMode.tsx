@@ -30,7 +30,13 @@ export default function LearnMode() {
 
   useEffect(() => {
     if (!skill) return
-    const sourceContext = graph ? `${graph.sourceTitle}: ${graph.sourceSummary}` : undefined
+    const sourceContext = graph
+      ? [
+          `SUBJECT: ${graph.sourceTitle}`,
+          `SUMMARY: ${graph.sourceSummary}`,
+          graph.sourceContent ? `SOURCE EXCERPT (match this domain exactly):\n${graph.sourceContent.slice(0, 1200)}` : '',
+        ].filter(Boolean).join('\n')
+      : undefined
     llmService.generateCAContent(skill, sourceContext).then(c => {
       setCaContent(c)
       setLoading(false)

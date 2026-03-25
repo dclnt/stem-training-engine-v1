@@ -100,6 +100,17 @@ const TOPIC_GRAPHS: Record<string, Partial<SkillGraph>> = {
       { id: 'orthogonal', label: 'Orthogonalization', description: 'Gram–Schmidt process, orthonormal bases', prerequisites: ['projections'], status: 'locked', masteryData: null, estimatedSCT: 110, depth: 5 },
     ],
   },
+  javascript: {
+    sourceTitle: 'JavaScript Programming',
+    nodes: [
+      { id: 'js-vars', label: 'Variables & declarations', description: 'Declare variables with var, let, and const; understand scope and hoisting', prerequisites: [], status: 'available', masteryData: null, estimatedSCT: 30, depth: 0 },
+      { id: 'js-destructure', label: 'Destructuring assignment', description: 'Extract values from objects and arrays using destructuring syntax', prerequisites: ['js-vars'], status: 'locked', masteryData: null, estimatedSCT: 45, depth: 1 },
+      { id: 'js-arrow', label: 'Arrow functions', description: 'Write concise functions with arrow syntax and understand lexical this binding', prerequisites: ['js-vars'], status: 'locked', masteryData: null, estimatedSCT: 40, depth: 1 },
+      { id: 'js-array-methods', label: 'Array methods', description: 'Use map, filter, reduce, find, and forEach on arrays', prerequisites: ['js-arrow'], status: 'locked', masteryData: null, estimatedSCT: 55, depth: 2 },
+      { id: 'js-closures', label: 'Closures & scope', description: 'Understand how inner functions capture outer variables through closures', prerequisites: ['js-arrow'], status: 'locked', masteryData: null, estimatedSCT: 70, depth: 2 },
+      { id: 'js-async', label: 'Async/Await & Promises', description: 'Write asynchronous code using Promise chains and async/await syntax', prerequisites: ['js-closures'], status: 'locked', masteryData: null, estimatedSCT: 90, depth: 3 },
+    ],
+  },
 }
 
 function detectTopic(source: SourceInput): string {
@@ -109,21 +120,25 @@ function detectTopic(source: SourceInput): string {
   if (/eigen|characteristic[\s-]poly|matrix[\s-]decom/.test(searchText)) return 'eigenvalues'
   if (/linear[\s-]algebra|vector[\s-]space|null[\s-]space|row[\s-]reduc|dot[\s-]product|orthogonal|gram.schmidt/.test(searchText)) return 'linear_algebra'
   if (/statistic|probability|distribution|variance|std[\s-]dev|hypothesis|regression|p[\s-]value|bayes|normal[\s-]dist/.test(searchText)) return 'statistics'
-  if (/python|javascript|typescript|\bdef\b|\bimport\b|algorithm|sorting|recursion|big.o|linked[\s-]list|binary[\s-]tree|hash[\s-]map|dynamic[\s-]program|data[\s-]struct/.test(searchText)) return 'python'
+  // JavaScript gets its own dedicated key — must come before the python check
+  if (/\bjavascript\b|destructur|\.jsx?\b|es6|es2015|const\s+\w|let\s+\w|arrow\s+func|closure|async\s+func|await\s+|promise|prototype|node\.?js|\.tsx?\b/.test(searchText)) return 'javascript'
+  if (/\bpython\b|typescript|\bdef\b|\bimport\b|algorithm|sorting|recursion|big.o|linked[\s-]list|binary[\s-]tree|hash[\s-]map|dynamic[\s-]program|data[\s-]struct/.test(searchText)) return 'python'
   if (/physics|newton|force|velocity|acceleration|momentum|kinematics|thermodynamics|electro|quantum|wave/.test(searchText)) return 'physics'
   if (/derivative|integral|limit|differentiat|chain[\s-]rule|taylor|calculus|antideriv/.test(searchText)) return 'calculus'
   if (/determinant|matrix/.test(searchText)) return 'eigenvalues'
-  return 'calculus'
+  // Default to javascript rather than calculus — safer neutral fallback for unrecognised code/text content
+  return 'javascript'
 }
 
 function mockBuildGraph(source: SourceInput): SkillGraph {
   const topicKey = detectTopic(source)
-  const template = TOPIC_GRAPHS[topicKey] ?? TOPIC_GRAPHS['calculus']
+  const template = TOPIC_GRAPHS[topicKey] ?? TOPIC_GRAPHS['javascript']
   return {
     id: uid(),
     sourceTitle: template.sourceTitle!,
     sourceType: source.type,
     sourceSummary: `Skill graph generated from your ${source.type} source covering ${template.sourceTitle}.`,
+    sourceContent: (source.fileContent ?? source.value ?? '').slice(0, 2000),
     nodes: (template.nodes as SkillNode[]).map(n => ({ ...n })),
     createdAt: Date.now(),
   }
@@ -206,6 +221,35 @@ const DRILL_BANKS: Record<string, DrillProblem[]> = {
     { id: uid(), skillId: 'descriptive', prompt: 'What is the standard deviation if the variance is $\\sigma^2 = 9$?', answer: '$\\sigma = 3$', hint: '$\\sigma = \\sqrt{\\sigma^2}$', variationType: 'symbolic', targetSeconds: 15 },
     { id: uid(), skillId: 'descriptive', prompt: 'A dataset has mean $\\bar{x} = 50$ and $\\sigma = 10$. What percentage of data lies within one standard deviation under the normal curve?', answer: 'Approximately 68%', hint: 'This is the 68-95-99.7 (empirical) rule.', variationType: 'applied', targetSeconds: 20 },
   ],
+  // JavaScript mock bank
+  'js-vars': [
+    { id: uid(), skillId: 'js-vars', prompt: 'What is the output of this code?\n```javascript\nvar x = 1;\nif (true) { var x = 2; }\nconsole.log(x);\n```', answer: '2', hint: '`var` is function-scoped, not block-scoped — the inner `var x` overwrites the outer one.', variationType: 'standard', targetSeconds: 25 },
+    { id: uid(), skillId: 'js-vars', prompt: 'What is the output of this code?\n```javascript\nlet y = 1;\nif (true) { let y = 2; }\nconsole.log(y);\n```', answer: '1', hint: '`let` is block-scoped — the inner `y` is confined to the `if` block.', variationType: 'standard', targetSeconds: 25 },
+    { id: uid(), skillId: 'js-vars', prompt: 'What happens when you run this?\n```javascript\nconsole.log(a);\nvar a = 5;\n```', answer: 'undefined (not a ReferenceError)', hint: '`var` declarations are hoisted to the top of their scope, but the assignment stays in place.', variationType: 'numeric', targetSeconds: 30 },
+    { id: uid(), skillId: 'js-vars', prompt: 'Which keyword(s) prevent reassignment after initial assignment?', answer: 'const', hint: '`const` prevents reassignment but does NOT make objects immutable.', variationType: 'symbolic', targetSeconds: 20 },
+    { id: uid(), skillId: 'js-vars', prompt: 'Fix this code so it does not throw:\n```javascript\nconst obj = { count: 0 };\nobj.count += 1;\n```', answer: 'No fix needed — modifying a property of a const object is allowed. Only reassigning the variable itself would throw.', hint: '`const` prevents rebinding the variable, not mutating the object it points to.', variationType: 'applied', targetSeconds: 35 },
+  ],
+  'js-destructure': [
+    { id: uid(), skillId: 'js-destructure', prompt: 'What is the value of `name` after this line?\n```javascript\nconst { name } = { name: "Alice", age: 30 };\n```', answer: '"Alice"', hint: 'Object destructuring extracts the property whose key matches the variable name.', variationType: 'standard', targetSeconds: 20 },
+    { id: uid(), skillId: 'js-destructure', prompt: 'What does `b` equal?\n```javascript\nconst [a, b] = [10, 20, 30];\n```', answer: '20', hint: 'Array destructuring assigns by position — `b` gets the second element.', variationType: 'standard', targetSeconds: 20 },
+    { id: uid(), skillId: 'js-destructure', prompt: 'Write one line that extracts `x` and `y` from `const point = { x: 4, y: 7 }`.', answer: 'const { x, y } = point;', hint: 'Use curly braces on the left side to destructure an object.', variationType: 'symbolic', targetSeconds: 25 },
+    { id: uid(), skillId: 'js-destructure', prompt: 'What is `city` after this?\n```javascript\nconst { address: { city } } = { address: { city: "Paris" } };\n```', answer: '"Paris"', hint: 'Nested destructuring follows the shape of the object — chain the `{}` to go deeper.', variationType: 'numeric', targetSeconds: 30 },
+    { id: uid(), skillId: 'js-destructure', prompt: 'Use destructuring to swap `a` and `b` in one line, given `let a = 1, b = 2`.', answer: '[a, b] = [b, a];', hint: 'Array destructuring on the left side can swap variables without a temp variable.', variationType: 'applied', targetSeconds: 30 },
+  ],
+  'js-arrow': [
+    { id: uid(), skillId: 'js-arrow', prompt: 'Rewrite this as an arrow function:\n```javascript\nfunction add(a, b) { return a + b; }\n```', answer: 'const add = (a, b) => a + b;', hint: 'Single-expression arrow functions have an implicit return — no `return` keyword needed.', variationType: 'standard', targetSeconds: 25 },
+    { id: uid(), skillId: 'js-arrow', prompt: 'What does this log?\n```javascript\nconst greet = name => `Hello, ${name}!`;\nconsole.log(greet("Bob"));\n```', answer: '"Hello, Bob!"', hint: 'Template literals use backticks and `${expression}` for interpolation.', variationType: 'standard', targetSeconds: 20 },
+    { id: uid(), skillId: 'js-arrow', prompt: 'An arrow function with no parameters needs what syntax for the parameter list?', answer: '() — empty parentheses are required', hint: 'You can omit parentheses only when there is exactly ONE parameter.', variationType: 'symbolic', targetSeconds: 20 },
+    { id: uid(), skillId: 'js-arrow', prompt: 'What is the key difference between arrow functions and regular functions regarding `this`?', answer: 'Arrow functions do not have their own `this` — they inherit `this` from the enclosing lexical scope', hint: 'This is called lexical `this` binding.', variationType: 'numeric', targetSeconds: 35 },
+    { id: uid(), skillId: 'js-arrow', prompt: 'Write an arrow function `double` that returns a number multiplied by 2, then use it to double 7.', answer: 'const double = n => n * 2; double(7); // 14', hint: 'Single-parameter arrow functions need no parentheses around the parameter.', variationType: 'applied', targetSeconds: 30 },
+  ],
+  'js-array-methods': [
+    { id: uid(), skillId: 'js-array-methods', prompt: 'What does this return?\n```javascript\n[1, 2, 3].map(x => x * 2);\n```', answer: '[2, 4, 6]', hint: '`map` returns a NEW array — same length, each element transformed by the callback.', variationType: 'standard', targetSeconds: 20 },
+    { id: uid(), skillId: 'js-array-methods', prompt: 'What does this return?\n```javascript\n[1, 2, 3, 4].filter(x => x % 2 === 0);\n```', answer: '[2, 4]', hint: '`filter` keeps elements where the callback returns true.', variationType: 'standard', targetSeconds: 20 },
+    { id: uid(), skillId: 'js-array-methods', prompt: 'What is the result?\n```javascript\n[1, 2, 3, 4].reduce((acc, x) => acc + x, 0);\n```', answer: '10', hint: '`reduce` accumulates a single value — the second argument (0) is the initial accumulator.', variationType: 'numeric', targetSeconds: 30 },
+    { id: uid(), skillId: 'js-array-methods', prompt: 'Write one line to get all even numbers from `const nums = [1,2,3,4,5,6]` using a single array method.', answer: 'const evens = nums.filter(n => n % 2 === 0);', hint: 'Use `filter` with a modulo check.', variationType: 'symbolic', targetSeconds: 25 },
+    { id: uid(), skillId: 'js-array-methods', prompt: 'Use `map` and `filter` together to get the squares of all odd numbers in `[1,2,3,4,5]`.', answer: '[1,2,3,4,5].filter(n => n % 2 !== 0).map(n => n * n) // [1, 9, 25]', hint: 'Chain: filter first to get odds, then map to square each.', variationType: 'applied', targetSeconds: 40 },
+  ],
   // Physics mock bank
   'kinematics': [
     { id: uid(), skillId: 'kinematics', prompt: 'A car starts from rest and accelerates at $a = 3\\,\\text{m/s}^2$. What is its velocity after $t = 4\\,\\text{s}$?', answer: '$v = at = 12\\,\\text{m/s}$', hint: 'Use $v = u + at$ with $u = 0$.', variationType: 'standard', targetSeconds: 25 },
@@ -218,8 +262,11 @@ const DRILL_BANKS: Record<string, DrillProblem[]> = {
 
 function getFallbackProblems(skillId: string, skill?: SkillNode): DrillProblem[] {
   const text = (skill ? `${skill.label} ${skill.description}` : '').toLowerCase()
-  // Match to the closest available mock bank by domain keywords
-  if (/python|javascript|typescript|java|html|css|function|class|variable|loop|array|object|algorithm|data.struct|recursion|sorting|programming|code|software|web|script|destructur|property|method|syntax|binary|hash|tree|stack|queue/.test(text)) {
+  // JavaScript / web / general programming — checked first
+  if (/javascript|destructur|\.jsx?|closure|async|await|promise|prototype|node\.?js|\.tsx?/.test(text)) {
+    return (DRILL_BANKS['js-destructure'] ?? DRILL_BANKS['js-vars'] ?? []).map(p => ({ ...p, skillId, id: uid() }))
+  }
+  if (/python|typescript|java|html|css|function|class|variable|loop|array|object|algorithm|data.struct|recursion|sorting|programming|code|software|web|script|property|method|syntax|binary|hash|tree|stack|queue/.test(text)) {
     return (DRILL_BANKS['py-variables'] ?? []).map(p => ({ ...p, skillId, id: uid() }))
   }
   if (/statistic|probability|distribution|variance|regression|bayes|p.value|hypothesis/.test(text)) {
@@ -234,9 +281,11 @@ function getFallbackProblems(skillId: string, skill?: SkillNode): DrillProblem[]
   if (/complex|fourier|signal|frequency/.test(text)) {
     return (DRILL_BANKS['complex-arith'] ?? []).map(p => ({ ...p, skillId, id: uid() }))
   }
-  // Last resort: calculus (truly unmatched math content)
-  const base = DRILL_BANKS['limits'] ?? []
-  return base.map(p => ({ ...p, skillId, id: uid() }))
+  if (/derivative|integral|limit|differentiat|chain.rule|calculus/.test(text)) {
+    return (DRILL_BANKS['limits'] ?? []).map(p => ({ ...p, skillId, id: uid() }))
+  }
+  // True last resort: generic JS variables — avoids serving calculus for unrelated content
+  return (DRILL_BANKS['js-vars'] ?? []).map(p => ({ ...p, skillId, id: uid() }))
 }
 
 function mockGetDrillSet(skill: SkillNode, previousSkill: SkillNode | null): DrillSet {
@@ -286,9 +335,18 @@ Rules:
 - estimatedSCT should reflect real cognitive load: 20–30s for recall, 60–120s for multi-step problems.
 - Keep node ids short and unique (e.g. "deriv-def", "chain-rule", "py-functions").`
 
-const DRILL_SET_SYSTEM = `You are a STEM drill problem designer following the Kumon + Hanon method.
+const DRILL_SET_SYSTEM = `You are a drill problem designer for any academic or professional subject, following the Kumon + Hanon spaced-repetition method.
 
-Given a skill and its subject context, generate a DrillSet as JSON. ALL problems MUST be strictly within the stated subject domain — never introduce examples from unrelated subjects.
+CRITICAL DOMAIN CONSTRAINT — READ FIRST:
+The user message contains a "SOURCE DOMAIN LOCK" block with a SOURCE EXCERPT from the learner's actual material.
+Your ENTIRE response must stay within that exact subject domain.
+- If the source is about JavaScript → every problem uses JavaScript code.
+- If the source is about Renaissance art → every problem is about Renaissance art.
+- If the source is about contract law → every problem is about contract law.
+NEVER substitute a different domain. A calculus formula inside a JavaScript drill = wrong. A history question inside a physics drill = wrong.
+The SOURCE EXCERPT is the ground truth — treat it like a locked context window.
+
+Given a skill and its subject context, generate a DrillSet as JSON.
 
 DrillSet schema:
 {
@@ -309,18 +367,26 @@ DrillProblem schema:
   "targetSeconds": number
 }
 
-Formatting rules — choose the format that matches the subject domain:
-- Programming/CS skills: use triple-backtick fences with correct language tag (javascript, python, html, etc.)
+Formatting rules — choose the format that matches the SOURCE DOMAIN:
+- Programming/CS source: use triple-backtick fences with the correct language tag (javascript, python, html, etc.)
   Example: "What does this output?\\n\`\`\`javascript\\nconst { a } = { a: 1 }; console.log(a);\\n\`\`\`"
-- Math/Physics skills: use LaTeX in $...$ for inline or $$...$$ for block.
-  Example: "Evaluate $\\lim_{x \\to 0} \\frac{\\sin x}{x}$"
-- Biology/Chemistry/other science: use plain English prose with relevant terminology.
+- Math/Physics source: use LaTeX in $...$ for inline or $$...$$ for block.
+- Humanities/Science/other: use plain English prose with domain-accurate terminology.
 - Cover all 5 variationTypes across the 5 problems (one each): standard, symbolic, numeric, inverse, applied.
 - Return ONLY valid JSON. No markdown wrapper. No explanations outside the JSON.`
 
-const CA_CONTENT_SYSTEM = `You are an expert educator using the Cognitive Apprenticeship framework.
+const CA_CONTENT_SYSTEM = `You are an expert educator using the Cognitive Apprenticeship framework for any academic or professional subject.
 
-Given a skill and its subject context, generate a CAContent object as JSON. ALL content MUST be strictly about the stated skill in its stated subject domain.
+CRITICAL DOMAIN CONSTRAINT — READ FIRST:
+The user message contains a "SOURCE DOMAIN LOCK" block with a SOURCE EXCERPT from the learner's actual material.
+Every word of your response must stay within that exact subject domain.
+- If the source is about JavaScript → every example, every step, every hint is about JavaScript.
+- If the source is about organic chemistry → every example is organic chemistry.
+- If the source is about music theory → every example is music theory.
+NEVER drift to a different domain. "Minimises arithmetic error" in a JavaScript lesson = wrong. Calculus symbols in a programming lesson = wrong.
+The SOURCE EXCERPT is the ground truth for subject domain — treat it like a locked context window.
+
+Generate a CAContent object as JSON.
 
 CAContent schema:
 {
@@ -335,14 +401,14 @@ CAContent schema:
 
 Formatting rules:
 - Use **bold** for key terms and emphasis.
-- Use numbered lists (1. Step one\\n2. Step two) for sequential steps — REQUIRED in workedExample.
-- Use bullet lists (- Point one\\n- Point two) for non-sequential items — REQUIRED in expertAnnotations content.
-- For programming skills: use triple-backtick fences with the correct language tag for code.
-- For math skills: use $...$ for inline LaTeX, $$...$$ for block math.
-- workedExample: walk through a concrete example from THIS subject with 4 numbered steps (1. Setup, 2. Strategy, 3. Execution, 4. Verification).
-- expertAnnotations: 3 metacognitive observations about expert thinking in THIS domain.
-- coachingHints: 3 progressive hints (not solutions) for a practice problem in THIS domain.
-- explorationSeed: list 3 extension challenges using a bullet list (- challenge).
+- For sequential steps use a numbered list on SEPARATE LINES: "1. Step one\\n2. Step two\\n3. Step three" — REQUIRED in workedExample.
+- For non-sequential points use a bullet list on SEPARATE LINES: "- Point one\\n- Point two" — REQUIRED in expertAnnotations and explorationSeed.
+- For programming sources: use triple-backtick fences with the correct language tag for any code.
+- For math/physics sources: use $...$ for inline LaTeX, $$...$$ for block math.
+- workedExample: walk through a real, concrete example from the SOURCE EXCERPT with exactly 4 numbered steps on separate lines (1. Setup, 2. Strategy, 3. Execution, 4. Verification). The example MUST use actual concepts, syntax, or scenarios from the source material — not generic placeholders.
+- expertAnnotations: 3 metacognitive observations about expert thinking in the source domain (not generic advice).
+- coachingHints: 3 progressive hints for a practice problem in the source domain.
+- explorationSeed: list exactly 3 extension challenges as a bullet list (- challenge) in the source domain.
 - Return ONLY valid JSON. No markdown wrapper. No explanations outside the JSON.`
 
 function extractJSON(text: string): string {
@@ -384,6 +450,8 @@ function evaluateAnswer(userAnswer: string, correctAnswer: string): boolean {
 
 export const llmService = {
   async generateSkillGraph(source: SourceInput): Promise<SkillGraph> {
+    // Preserve up to 2000 chars of the original material so downstream calls can anchor content
+    const sourceContent = (source.fileContent ?? source.value ?? '').slice(0, 2000)
     if (HAS_API_KEY) {
       try {
         const content = source.fileContent ?? source.value ?? ''
@@ -397,6 +465,7 @@ export const llmService = {
           sourceTitle: parsed.sourceTitle ?? 'Generated Skill Graph',
           sourceType: source.type,
           sourceSummary: parsed.sourceSummary ?? '',
+          sourceContent,
           nodes: (parsed.nodes as SkillNode[]).map((n, i) => ({
             ...n,
             status: i === 0 ? 'available' : 'locked',
@@ -415,8 +484,10 @@ export const llmService = {
   async generateCAContent(skill: SkillNode, sourceContext?: string): Promise<CAContent> {
     if (HAS_API_KEY) {
       try {
-        const contextLine = sourceContext ? `\nSubject context: ${sourceContext}` : ''
-        const userPrompt = `Skill: "${skill.label}"\nDescription: ${skill.description}\nPrerequisites: ${skill.prerequisites.join(', ') || 'none'}${contextLine}\n\nGenerate Cognitive Apprenticeship content strictly about "${skill.label}" as it applies to this subject. Do NOT introduce examples from unrelated subjects.`
+        const domainBlock = sourceContext
+          ? `═══ SOURCE DOMAIN LOCK ═══\n${sourceContext}\n══════════════════════════\n\n`
+          : ''
+        const userPrompt = `${domainBlock}Skill: "${skill.label}"\nDescription: ${skill.description}\nPrerequisites: ${skill.prerequisites.join(', ') || 'none'}\n\nGenerate Cognitive Apprenticeship content EXCLUSIVELY about "${skill.label}" within the subject domain described in the SOURCE DOMAIN LOCK above. Every example, every worked step, every hint MUST come from that domain. Do NOT introduce concepts, symbols, or examples from any other domain.`
         const raw = await callClaude(CA_CONTENT_SYSTEM, userPrompt)
         const parsed = JSON.parse(extractJSON(raw))
         return parsed as CAContent
@@ -431,8 +502,10 @@ export const llmService = {
   async generateDrillSet(skill: SkillNode, previousSkill: SkillNode | null, sourceContext?: string): Promise<DrillSet> {
     if (HAS_API_KEY) {
       try {
-        const contextLine = sourceContext ? `\nSubject context: ${sourceContext}` : ''
-        const userPrompt = `Skill id: "${skill.id}"\nSkill label: "${skill.label}"\nDescription: ${skill.description}\nestimatedSCT: ${skill.estimatedSCT} seconds${contextLine}\n\nAll 5 drill problems MUST test "${skill.label}" specifically within this subject. Use the domain's native format (code blocks for programming, LaTeX for math, prose for science concepts). Do NOT generate problems from unrelated domains.`
+        const domainBlock = sourceContext
+          ? `═══ SOURCE DOMAIN LOCK ═══\n${sourceContext}\n══════════════════════════\n\n`
+          : ''
+        const userPrompt = `${domainBlock}Skill id: "${skill.id}"\nSkill label: "${skill.label}"\nDescription: ${skill.description}\nestimatedSCT: ${skill.estimatedSCT} seconds\n\nAll 5 drill problems MUST test "${skill.label}" EXCLUSIVELY within the subject domain in the SOURCE DOMAIN LOCK above. Use the domain's native format (code blocks for programming, LaTeX for math, prose for humanities/science). Do NOT generate problems from any other domain — a calculus problem in a JavaScript skill = wrong, a physics problem in a history skill = wrong.`
         const raw = await callClaude(DRILL_SET_SYSTEM, userPrompt)
         const parsed = JSON.parse(extractJSON(raw))
         const problems: DrillProblem[] = (parsed.problems ?? []).map((p: DrillProblem) => ({

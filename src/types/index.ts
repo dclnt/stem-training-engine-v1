@@ -28,6 +28,7 @@ export interface SkillGraph {
   sourceTitle: string
   sourceType: 'youtube' | 'url' | 'file' | 'text'
   sourceSummary: string
+  sourceContent?: string   // first ~2000 chars of the user's original material; used to anchor Learn/Drill to the correct domain
   nodes: SkillNode[]
   createdAt: number
 }

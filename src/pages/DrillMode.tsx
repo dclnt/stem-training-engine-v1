@@ -52,7 +52,13 @@ export default function DrillMode() {
     const prevNode = skill.prerequisites[0]
       ? graph.nodes.find(n => n.id === skill.prerequisites[0]) ?? null
       : null
-    const sourceContext = graph ? `${graph.sourceTitle}: ${graph.sourceSummary}` : undefined
+    const sourceContext = graph
+      ? [
+          `SUBJECT: ${graph.sourceTitle}`,
+          `SUMMARY: ${graph.sourceSummary}`,
+          graph.sourceContent ? `SOURCE EXCERPT (match this domain exactly):\n${graph.sourceContent.slice(0, 1200)}` : '',
+        ].filter(Boolean).join('\n')
+      : undefined
     llmService.generateDrillSet(skill, prevNode, sourceContext).then(ds => {
       setDrillSet(ds)
       setLoading(false)

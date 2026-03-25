@@ -16,7 +16,48 @@ type Segment =
   | { type: 'code'; value: string; language: string }
   | { type: 'bold'; value: string }
 
-/** Renders a plain-text block with support for bullet (-) and numbered (1.) list lines. */
+/**
+ * Renders inline content within a single list item or paragraph line.
+ * Re-uses parseSegments so bold/math/code inside list items work correctly.
+ */
+function renderInline(text: string, key: string): React.ReactNode {
+  const segments = parseSegments(text)
+  return (
+    <span key={key}>
+      {segments.map((seg, i) => {
+        if (seg.type === 'bold') {
+          return <strong key={i} className="text-white font-semibold">{seg.value}</strong>
+        }
+        if (seg.type === 'math-inline') {
+          return (
+            <span key={i} dangerouslySetInnerHTML={{ __html: renderKatex(seg.value, false) }} />
+          )
+        }
+        if (seg.type === 'math-block') {
+          return (
+            <span key={i} dangerouslySetInnerHTML={{ __html: renderKatex(seg.value, false) }} />
+          )
+        }
+        if (seg.type === 'code') {
+          return (
+            <code key={i} className="bg-[#0d1117] text-emerald-300 px-1.5 py-0.5 rounded text-sm font-mono">
+              {seg.value.trim()}
+            </code>
+          )
+        }
+        // plain text
+        return <span key={i}>{seg.value}</span>
+      })}
+    </span>
+  )
+}
+
+/**
+ * Renders a plain-text block with support for bullet (-/*) and numbered (1.) list lines.
+ * List structure is detected FIRST on the raw line, then inline formatting (bold, math, code)
+ * is applied within each item — so "1. **Setup** — Do X" renders as a numbered <li> with
+ * "Setup" bolded inside it rather than being destroyed by the bold parser.
+ */
 function renderTextBlock(text: string, key: number): React.ReactNode {
   const lines = text.split('\n')
   const result: React.ReactNode[] = []
@@ -28,13 +69,21 @@ function renderTextBlock(text: string, key: number): React.ReactNode {
     if (listType === 'ul') {
       result.push(
         <ul key={`${key}-ul-${idx}`} className="list-disc list-outside ml-5 space-y-1 my-2">
-          {listItems.map((item, i) => <li key={i} className="text-[#cbd5e1] leading-relaxed">{item}</li>)}
+          {listItems.map((item, i) => (
+            <li key={i} className="text-[#cbd5e1] leading-relaxed">
+              {renderInline(item, `${key}-ul-${idx}-${i}`)}
+            </li>
+          ))}
         </ul>
       )
     } else {
       result.push(
         <ol key={`${key}-ol-${idx}`} className="list-decimal list-outside ml-5 space-y-1 my-2">
-          {listItems.map((item, i) => <li key={i} className="text-[#cbd5e1] leading-relaxed">{item}</li>)}
+          {listItems.map((item, i) => (
+            <li key={i} className="text-[#cbd5e1] leading-relaxed">
+              {renderInline(item, `${key}-ol-${idx}-${i}`)}
+            </li>
+          ))}
         </ol>
       )
     }
@@ -56,7 +105,11 @@ function renderTextBlock(text: string, key: number): React.ReactNode {
     } else {
       flushList(idx)
       if (line.trim()) {
-        result.push(<span key={`${key}-t-${idx}`} className="block">{line}</span>)
+        result.push(
+          <span key={`${key}-t-${idx}`} className="block">
+            {renderInline(line, `${key}-t-${idx}-inline`)}
+          </span>
+        )
       } else if (result.length > 0) {
         result.push(<span key={`${key}-br-${idx}`} className="block h-2" />)
       }

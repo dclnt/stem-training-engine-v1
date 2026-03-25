@@ -412,13 +412,17 @@ Formatting rules:
 - Return ONLY valid JSON. No markdown wrapper. No explanations outside the JSON.`
 
 function extractJSON(text: string): string {
-  // Strip any accidental markdown code fences
-  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (match) return match[1].trim()
-  // Try to find the outermost JSON object
+  // IMPORTANT: Try outermost {…} FIRST.
+  // The regex approach (below) uses a non-greedy match that stops at the first ``` it sees,
+  // which breaks when drill problem prompts contain inner ```javascript code fences inside
+  // the JSON string values — returning truncated invalid JSON and causing a parse error.
+  // Grabbing from the first { to the last } always captures the full object correctly.
   const start = text.indexOf('{')
   const end = text.lastIndexOf('}')
   if (start !== -1 && end !== -1) return text.slice(start, end + 1)
+  // Fallback: strip a markdown code-fence wrapper if no braces were found at all
+  const match = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (match) return match[1].trim()
   return text.trim()
 }
 

@@ -33,6 +33,8 @@ export default function DrillMode() {
 
   const [drillSet, setDrillSet] = useState<DrillSet | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [retryKey, setRetryKey] = useState(0)
   const [phase, setPhase] = useState<DrillPhase>('isolated')
   const [tempoStage, setTempoStage] = useState<TempoStage>('untimed')
   const [tempoStageIndex, setTempoStageIndex] = useState(0)
@@ -49,21 +51,28 @@ export default function DrillMode() {
 
   useEffect(() => {
     if (!skill || !graph) return
+    setLoadError(null)
+    setLoading(true)
     const prevNode = skill.prerequisites[0]
       ? graph.nodes.find(n => n.id === skill.prerequisites[0]) ?? null
       : null
-    const sourceContext = graph
-      ? [
-          `SUBJECT: ${graph.sourceTitle}`,
-          `SUMMARY: ${graph.sourceSummary}`,
-          graph.sourceContent ? `SOURCE EXCERPT (match this domain exactly):\n${graph.sourceContent.slice(0, 1200)}` : '',
-        ].filter(Boolean).join('\n')
-      : undefined
-    llmService.generateDrillSet(skill, prevNode, sourceContext).then(ds => {
-      setDrillSet(ds)
-      setLoading(false)
-    })
-  }, [skill, graph])
+    const sourceContext = [
+      `SUBJECT: ${graph.sourceTitle}`,
+      `SUMMARY: ${graph.sourceSummary}`,
+      graph.sourceContent ? `SOURCE EXCERPT (match this domain exactly):\n${graph.sourceContent.slice(0, 1200)}` : '',
+    ].filter(Boolean).join('\n')
+    llmService.generateDrillSet(skill, prevNode, sourceContext)
+      .then(ds => { setDrillSet(ds); setLoading(false) })
+      .catch(err => {
+        const msg = err instanceof Error ? err.message : ''
+        setLoadError(
+          msg === 'API_KEY_MISSING'
+            ? 'An API key is required to generate drill problems. Add VITE_ANTHROPIC_API_KEY to your environment.'
+            : 'Could not generate drill problems for this skill. Please try again.'
+        )
+        setLoading(false)
+      })
+  }, [skill, graph, retryKey])
 
   const startTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current)
@@ -101,6 +110,34 @@ export default function DrillMode() {
       <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center gap-3">
         <Loader size={24} className="text-amber-400 animate-spin" />
         <p className="text-[#94a3b8] text-sm">Generating drill problems...</p>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-[#1e293b] border border-red-500/30 rounded-2xl p-8 text-center">
+          <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+            <XCircle size={24} className="text-red-400" />
+          </div>
+          <h2 className="text-white font-semibold text-lg mb-2">Drill Problems Unavailable</h2>
+          <p className="text-[#94a3b8] text-sm mb-6">{loadError}</p>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => navigate('/graph')}
+              className="border border-[#334155] text-[#94a3b8] hover:text-white px-4 py-2 rounded-xl transition-colors text-sm"
+            >
+              Back to Graph
+            </button>
+            <button
+              onClick={() => setRetryKey(k => k + 1)}
+              className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl transition-colors text-sm font-medium"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
       </div>
     )
   }

@@ -450,84 +450,87 @@ function evaluateAnswer(userAnswer: string, correctAnswer: string): boolean {
 
 export const llmService = {
   async generateSkillGraph(source: SourceInput): Promise<SkillGraph> {
+    // No API key → hard stop. We never generate a wrong-subject graph as fallback.
+    if (!HAS_API_KEY) {
+      throw new Error('API_KEY_MISSING')
+    }
     // Preserve up to 2000 chars of the original material so downstream calls can anchor content
     const sourceContent = (source.fileContent ?? source.value ?? '').slice(0, 2000)
-    if (HAS_API_KEY) {
-      try {
-        const content = source.fileContent ?? source.value ?? ''
-        const userPrompt = content.length > 8000
-          ? content.slice(0, 8000) + '\n\n[Content truncated — generate graph from what you can see above]'
-          : content || `Source: ${source.filename ?? source.value ?? 'unknown'}`
-        const raw = await callClaude(SKILL_GRAPH_SYSTEM, userPrompt)
-        const parsed = JSON.parse(extractJSON(raw))
-        return {
-          id: uid(),
-          sourceTitle: parsed.sourceTitle ?? 'Generated Skill Graph',
-          sourceType: source.type,
-          sourceSummary: parsed.sourceSummary ?? '',
-          sourceContent,
-          nodes: (parsed.nodes as SkillNode[]).map((n, i) => ({
-            ...n,
-            status: i === 0 ? 'available' : 'locked',
-            masteryData: null,
-          })),
-          createdAt: Date.now(),
-        }
-      } catch (err) {
-        console.warn('Claude API error — falling back to mock:', err)
+    try {
+      const content = source.fileContent ?? source.value ?? ''
+      const userPrompt = content.length > 8000
+        ? content.slice(0, 8000) + '\n\n[Content truncated — generate graph from what you can see above]'
+        : content || `Source: ${source.filename ?? source.value ?? 'unknown'}`
+      const raw = await callClaude(SKILL_GRAPH_SYSTEM, userPrompt)
+      const parsed = JSON.parse(extractJSON(raw))
+      return {
+        id: uid(),
+        sourceTitle: parsed.sourceTitle ?? 'Generated Skill Graph',
+        sourceType: source.type,
+        sourceSummary: parsed.sourceSummary ?? '',
+        sourceContent,
+        nodes: (parsed.nodes as SkillNode[]).map((n, i) => ({
+          ...n,
+          status: i === 0 ? 'available' : 'locked',
+          masteryData: null,
+        })),
+        createdAt: Date.now(),
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate skill graph'
+      throw new Error(msg)
     }
-    await new Promise(r => setTimeout(r, 1800))
-    return mockBuildGraph(source)
   },
 
   async generateCAContent(skill: SkillNode, sourceContext?: string): Promise<CAContent> {
-    if (HAS_API_KEY) {
-      try {
-        const domainBlock = sourceContext
-          ? `═══ SOURCE DOMAIN LOCK ═══\n${sourceContext}\n══════════════════════════\n\n`
-          : ''
-        const userPrompt = `${domainBlock}Skill: "${skill.label}"\nDescription: ${skill.description}\nPrerequisites: ${skill.prerequisites.join(', ') || 'none'}\n\nGenerate Cognitive Apprenticeship content EXCLUSIVELY about "${skill.label}" within the subject domain described in the SOURCE DOMAIN LOCK above. Every example, every worked step, every hint MUST come from that domain. Do NOT introduce concepts, symbols, or examples from any other domain.`
-        const raw = await callClaude(CA_CONTENT_SYSTEM, userPrompt)
-        const parsed = JSON.parse(extractJSON(raw))
-        return parsed as CAContent
-      } catch (err) {
-        console.warn('Claude API error — falling back to mock CA content:', err)
-      }
+    // No API key → hard stop. We never serve a generic/wrong-subject lesson as fallback.
+    if (!HAS_API_KEY) {
+      throw new Error('API_KEY_MISSING')
     }
-    await new Promise(r => setTimeout(r, 1200))
-    return mockMakeCAContent(skill)
+    try {
+      const domainBlock = sourceContext
+        ? `═══ SOURCE DOMAIN LOCK ═══\n${sourceContext}\n══════════════════════════\n\n`
+        : ''
+      const userPrompt = `${domainBlock}Skill: "${skill.label}"\nDescription: ${skill.description}\nPrerequisites: ${skill.prerequisites.join(', ') || 'none'}\n\nGenerate Cognitive Apprenticeship content EXCLUSIVELY about "${skill.label}" within the subject domain described in the SOURCE DOMAIN LOCK above. Every example, every worked step, every hint MUST come from that domain. Do NOT introduce concepts, symbols, or examples from any other domain.`
+      const raw = await callClaude(CA_CONTENT_SYSTEM, userPrompt)
+      const parsed = JSON.parse(extractJSON(raw))
+      return parsed as CAContent
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate lesson content'
+      throw new Error(msg)
+    }
   },
 
   async generateDrillSet(skill: SkillNode, previousSkill: SkillNode | null, sourceContext?: string): Promise<DrillSet> {
-    if (HAS_API_KEY) {
-      try {
-        const domainBlock = sourceContext
-          ? `═══ SOURCE DOMAIN LOCK ═══\n${sourceContext}\n══════════════════════════\n\n`
-          : ''
-        const userPrompt = `${domainBlock}Skill id: "${skill.id}"\nSkill label: "${skill.label}"\nDescription: ${skill.description}\nestimatedSCT: ${skill.estimatedSCT} seconds\n\nAll 5 drill problems MUST test "${skill.label}" EXCLUSIVELY within the subject domain in the SOURCE DOMAIN LOCK above. Use the domain's native format (code blocks for programming, LaTeX for math, prose for humanities/science). Do NOT generate problems from any other domain — a calculus problem in a JavaScript skill = wrong, a physics problem in a history skill = wrong.`
-        const raw = await callClaude(DRILL_SET_SYSTEM, userPrompt)
-        const parsed = JSON.parse(extractJSON(raw))
-        const problems: DrillProblem[] = (parsed.problems ?? []).map((p: DrillProblem) => ({
-          ...p,
-          id: uid(),
-          skillId: skill.id,
-        }))
-        const chainingProblems: DrillProblem[] = previousSkill
-          ? problems.slice(0, 2).map(p => ({ ...p, id: uid(), skillId: previousSkill.id }))
-          : []
-        return {
-          problems,
-          chainingProblems,
-          targetSCT: skill.estimatedSCT,
-          tempoStages: [0, Math.round(skill.estimatedSCT * 1.5), skill.estimatedSCT, Math.round(skill.estimatedSCT * 0.8)],
-        }
-      } catch (err) {
-        console.warn('Claude API error — falling back to mock drill set:', err)
-      }
+    // No API key → hard stop. We never serve wrong-subject drill problems as fallback.
+    if (!HAS_API_KEY) {
+      throw new Error('API_KEY_MISSING')
     }
-    await new Promise(r => setTimeout(r, 900))
-    return mockGetDrillSet(skill, previousSkill)
+    try {
+      const domainBlock = sourceContext
+        ? `═══ SOURCE DOMAIN LOCK ═══\n${sourceContext}\n══════════════════════════\n\n`
+        : ''
+      const userPrompt = `${domainBlock}Skill id: "${skill.id}"\nSkill label: "${skill.label}"\nDescription: ${skill.description}\nestimatedSCT: ${skill.estimatedSCT} seconds\n\nAll 5 drill problems MUST test "${skill.label}" EXCLUSIVELY within the subject domain in the SOURCE DOMAIN LOCK above. Use the domain's native format (code blocks for programming, LaTeX for math, prose for humanities/science). Do NOT generate problems from any other domain — a calculus problem in a JavaScript skill = wrong, a physics problem in a history skill = wrong.`
+      const raw = await callClaude(DRILL_SET_SYSTEM, userPrompt)
+      const parsed = JSON.parse(extractJSON(raw))
+      const problems: DrillProblem[] = (parsed.problems ?? []).map((p: DrillProblem) => ({
+        ...p,
+        id: uid(),
+        skillId: skill.id,
+      }))
+      const chainingProblems: DrillProblem[] = previousSkill
+        ? problems.slice(0, 2).map(p => ({ ...p, id: uid(), skillId: previousSkill.id }))
+        : []
+      return {
+        problems,
+        chainingProblems,
+        targetSCT: skill.estimatedSCT,
+        tempoStages: [0, Math.round(skill.estimatedSCT * 1.5), skill.estimatedSCT, Math.round(skill.estimatedSCT * 0.8)],
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to generate drill problems'
+      throw new Error(msg)
+    }
   },
 
   evaluateAnswer,

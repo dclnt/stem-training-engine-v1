@@ -49,8 +49,13 @@ export default function HomePage() {
       const graph = await llmService.generateSkillGraph(source)
       addGraph(graph)
       navigate('/graph')
-    } catch {
-      setError('Failed to generate skill graph. Please try again.')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      setError(
+        msg === 'API_KEY_MISSING'
+          ? 'No API key detected. Add VITE_ANTHROPIC_API_KEY to your environment and restart the dev server.'
+          : 'Failed to generate skill graph. Please check your source and try again.'
+      )
     } finally {
       setLoading(false)
     }

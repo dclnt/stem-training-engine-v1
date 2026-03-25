@@ -30,7 +30,9 @@ export const useAppStore = create<AppState>()(
       activeSkillId: null,
 
       addGraph: (graph) =>
-        set(s => ({ graphs: [...s.graphs, graph], activeGraphId: graph.id })),
+        // Replace the entire graphs array — each new upload is a fresh session.
+        // Prevents old Python/Calculus/unrelated graphs from polluting the current session.
+        set({ graphs: [graph], activeGraphId: graph.id, activeSkillId: null }),
 
       setActiveGraph: (id) => set({ activeGraphId: id, activeSkillId: null }),
 

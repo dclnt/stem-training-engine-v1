@@ -16,6 +16,44 @@ type Segment =
   | { type: 'code'; value: string; language: string }
   | { type: 'bold'; value: string }
 
+type Block =
+  | { type: 'code'; language: string; value: string }
+  | { type: 'math-block'; value: string }
+  | { type: 'text'; value: string }
+
+/**
+ * Splits content into atomic blocks BEFORE any inline parsing.
+ * Only code fences and block math are extracted as atomic units.
+ * All other text (including bold, inline math, etc.) stays as a plain text block
+ * so it can be processed line-by-line without fragmenting sentences.
+ */
+function splitIntoBlocks(content: string): Block[] {
+  const blocks: Block[] = []
+  const BLOCK_REGEX = /```(\w+)?\n?([\s\S]*?)```|\$\$([\s\S]+?)\$\$/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+
+  while ((match = BLOCK_REGEX.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      blocks.push({ type: 'text', value: content.slice(lastIndex, match.index) })
+    }
+    if (match[2] !== undefined || match[1] !== undefined) {
+      // Code fence: group 1 = language, group 2 = body
+      blocks.push({ type: 'code', language: match[1]?.trim() || 'python', value: match[2] ?? '' })
+    } else if (match[3] !== undefined) {
+      // Block math: group 3
+      blocks.push({ type: 'math-block', value: match[3] })
+    }
+    lastIndex = BLOCK_REGEX.lastIndex
+  }
+
+  if (lastIndex < content.length) {
+    blocks.push({ type: 'text', value: content.slice(lastIndex) })
+  }
+
+  return blocks
+}
+
 /**
  * Renders inline content within a single list item or paragraph line.
  * Re-uses parseSegments so bold/math/code inside list items work correctly.
@@ -53,12 +91,15 @@ function renderInline(text: string, key: string): React.ReactNode {
 }
 
 /**
- * Renders a plain-text block with support for bullet (-/*) and numbered (1.) list lines.
- * List structure is detected FIRST on the raw line, then inline formatting (bold, math, code)
- * is applied within each item — so "1. **Setup** — Do X" renders as a numbered <li> with
- * "Setup" bolded inside it rather than being destroyed by the bold parser.
+ * Processes a plain text block line-by-line, grouping list lines into
+ * <ul>/<ol> and rendering each paragraph line with renderInline() so
+ * bold/math/code stay inline within the same sentence.
+ *
+ * This is the LINE-FIRST architecture: structure (list vs paragraph) is
+ * detected on the full raw line BEFORE any inline formatting is applied,
+ * so bold markers never fragment a sentence into separate block elements.
  */
-function renderTextBlock(text: string, key: number): React.ReactNode {
+function renderTextLines(text: string, blockKey: number): React.ReactNode[] {
   const lines = text.split('\n')
   const result: React.ReactNode[] = []
   let listItems: string[] = []
@@ -68,20 +109,20 @@ function renderTextBlock(text: string, key: number): React.ReactNode {
     if (listItems.length === 0) return
     if (listType === 'ul') {
       result.push(
-        <ul key={`${key}-ul-${idx}`} className="list-disc list-outside ml-5 space-y-1 my-2">
+        <ul key={`${blockKey}-ul-${idx}`} className="list-disc list-outside ml-5 space-y-1 my-2">
           {listItems.map((item, i) => (
             <li key={i} className="text-[#cbd5e1] leading-relaxed">
-              {renderInline(item, `${key}-ul-${idx}-${i}`)}
+              {renderInline(item, `${blockKey}-ul-${idx}-${i}`)}
             </li>
           ))}
         </ul>
       )
     } else {
       result.push(
-        <ol key={`${key}-ol-${idx}`} className="list-decimal list-outside ml-5 space-y-1 my-2">
+        <ol key={`${blockKey}-ol-${idx}`} className="list-decimal list-outside ml-5 space-y-1 my-2">
           {listItems.map((item, i) => (
             <li key={i} className="text-[#cbd5e1] leading-relaxed">
-              {renderInline(item, `${key}-ol-${idx}-${i}`)}
+              {renderInline(item, `${blockKey}-ol-${idx}-${i}`)}
             </li>
           ))}
         </ol>
@@ -106,18 +147,18 @@ function renderTextBlock(text: string, key: number): React.ReactNode {
       flushList(idx)
       if (line.trim()) {
         result.push(
-          <span key={`${key}-t-${idx}`} className="block">
-            {renderInline(line, `${key}-t-${idx}-inline`)}
-          </span>
+          <p key={`${blockKey}-p-${idx}`} className="leading-relaxed">
+            {renderInline(line, `${blockKey}-p-${idx}`)}
+          </p>
         )
       } else if (result.length > 0) {
-        result.push(<span key={`${key}-br-${idx}`} className="block h-2" />)
+        result.push(<div key={`${blockKey}-sp-${idx}`} className="h-2" />)
       }
     }
   })
   flushList(lines.length)
 
-  return <span key={key}>{result}</span>
+  return result
 }
 
 /**
@@ -127,6 +168,10 @@ function renderTextBlock(text: string, key: number): React.ReactNode {
  *   2. $$...$$            — block math
  *   3. $...$              — inline math
  *   4. **...**            — bold
+ *
+ * NOTE: This is used only by renderInline() (for processing individual lines)
+ * and by the inline mode of ContentRenderer. It is NOT called at the top level
+ * of block mode — splitIntoBlocks() handles the top level instead.
  */
 function parseSegments(content: string): Segment[] {
   const segments: Segment[] = []
@@ -180,64 +225,58 @@ function renderKatex(latex: string, displayMode: boolean): string {
 export default function ContentRenderer({ content, className, inline = false }: ContentRendererProps) {
   if (!content) return null
 
-  const segments = parseSegments(content)
-  const hasBlock = !inline && segments.some(s => s.type === 'math-block' || s.type === 'code')
+  // ── Inline mode ──────────────────────────────────────────────────────────
+  // Unchanged behaviour: render segments directly without block-level wrappers.
+  if (inline) {
+    const segments = parseSegments(content)
+    return (
+      <span className={className}>
+        {segments.map((seg, i) => {
+          if (seg.type === 'bold') {
+            return <strong key={i} className="text-white font-semibold">{seg.value}</strong>
+          }
+          if (seg.type === 'math-inline' || seg.type === 'math-block') {
+            return <span key={i} dangerouslySetInnerHTML={{ __html: renderKatex(seg.value, false) }} />
+          }
+          if (seg.type === 'code') {
+            return (
+              <code key={i} className="bg-[#0d1117] text-emerald-300 px-1.5 py-0.5 rounded text-sm font-mono">
+                {seg.value.trim()}
+              </code>
+            )
+          }
+          return <span key={i}>{seg.value}</span>
+        })}
+      </span>
+    )
+  }
 
-  const rendered = segments.map((seg, i) => {
-    switch (seg.type) {
-      case 'code':
-        if (inline) {
-          // In inline mode, render code as a simple styled span
-          return (
-            <code key={i} className="bg-[#0d1117] text-emerald-300 px-1.5 py-0.5 rounded text-sm font-mono">
-              {seg.value.trim()}
-            </code>
-          )
-        }
-        return <CodeBlock key={i} code={seg.value} language={seg.language} />
+  // ── Block mode: LINE-FIRST architecture ───────────────────────────────────
+  // 1. splitIntoBlocks extracts code fences and block math as atomic units.
+  //    All other text (including bold, inline math, etc.) stays as one text block.
+  // 2. Each text block is split into lines.
+  // 3. Each line is classified (bullet / numbered / paragraph) BEFORE inline
+  //    formatting is applied, so bold markers never fragment a sentence.
+  const blocks = splitIntoBlocks(content)
+  const rendered: React.ReactNode[] = []
 
-      case 'math-block':
-        if (inline) {
-          return (
-            <span
-              key={i}
-              dangerouslySetInnerHTML={{ __html: renderKatex(seg.value, false) }}
-            />
-          )
-        }
-        return (
-          <div
-            key={i}
-            className="my-3 overflow-x-auto text-center"
-            dangerouslySetInnerHTML={{ __html: renderKatex(seg.value, true) }}
-          />
-        )
-
-      case 'math-inline':
-        return (
-          <span
-            key={i}
-            dangerouslySetInnerHTML={{ __html: renderKatex(seg.value, false) }}
-          />
-        )
-
-      case 'bold':
-        return (
-          <strong key={i} className="text-white font-semibold">
-            {seg.value}
-          </strong>
-        )
-
-      case 'text':
-      default:
-        if (inline) return <span key={i}>{seg.value}</span>
-        return renderTextBlock(seg.value, i)
+  blocks.forEach((block, i) => {
+    if (block.type === 'code') {
+      rendered.push(<CodeBlock key={i} code={block.value} language={block.language} />)
+    } else if (block.type === 'math-block') {
+      rendered.push(
+        <div
+          key={i}
+          className="my-3 overflow-x-auto text-center"
+          dangerouslySetInnerHTML={{ __html: renderKatex(block.value, true) }}
+        />
+      )
+    } else {
+      // text block: process line by line
+      const lines = renderTextLines(block.value, i)
+      rendered.push(...lines)
     }
   })
 
-  if (hasBlock) {
-    return <div className={className}>{rendered}</div>
-  }
-
-  return <span className={className}>{rendered}</span>
+  return <div className={className}>{rendered}</div>
 }

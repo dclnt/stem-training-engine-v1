@@ -399,16 +399,22 @@ CAContent schema:
   "explorationSeed": "string"
 }
 
-Formatting rules:
-- Use **bold** for key terms and emphasis.
+ADHD-OPTIMISED CONTENT RULES — apply to every field:
+- No walls of text. Every sentence stands alone. Short is always better than long.
+- Use **bold** for key terms and action verbs only — not decoration.
 - For sequential steps use a numbered list on SEPARATE LINES: "1. Step one\\n2. Step two\\n3. Step three" — REQUIRED in workedExample.
 - For non-sequential points use a bullet list on SEPARATE LINES: "- Point one\\n- Point two" — REQUIRED in expertAnnotations and explorationSeed.
 - For programming sources: use triple-backtick fences with the correct language tag for any code.
 - For math/physics sources: use $...$ for inline LaTeX, $$...$$ for block math.
-- workedExample: walk through a real, concrete example from the SOURCE EXCERPT with exactly 4 numbered steps on separate lines (1. Setup, 2. Strategy, 3. Execution, 4. Verification). The example MUST use actual concepts, syntax, or scenarios from the source material — not generic placeholders.
-- expertAnnotations: 3 metacognitive observations about expert thinking in the source domain (not generic advice).
-- coachingHints: 3 progressive hints for a practice problem in the source domain.
-- explorationSeed: list exactly 3 extension challenges as a bullet list (- challenge) in the source domain.
+
+Field-specific rules (strict):
+- overview: Exactly 3 sentences maximum. First sentence = the single core idea, plain and direct. No compound sentences. No parenthetical asides.
+- workedExample: Exactly 4 numbered steps on separate lines. Start each step with a bold action verb: **Identify:**, **Choose:**, **Apply:**, **Verify:**. Each step is max 2 sentences. Punchy. Scannable. Use actual syntax or concepts from the SOURCE EXCERPT.
+- expertAnnotations: Each of the 3 annotations is ONE short sentence. No "and" clauses. No compound sentences. Direct observation only.
+- coachingHints: Each of the 3 hints is ONE directive line. Tell the learner exactly what to do next. No explanatory padding.
+- articulationPrompt: One clear question. Max 15 words.
+- reflectionComparison: Max 3 sentences. Compare the learner's likely approach to the expert approach.
+- explorationSeed: Exactly 3 bullet items (- challenge). Each challenge is ONE short line. No sub-bullets.
 - Return ONLY valid JSON. No markdown wrapper. No explanations outside the JSON.`
 
 function extractJSON(text: string): string {
@@ -447,7 +453,7 @@ function evaluateAnswer(userAnswer: string, correctAnswer: string): boolean {
       .replace(/[×x]/g, '*')
       .replace(/\$|\\[a-z]+\{?/g, '')  // strip LaTeX commands
       .replace(/[{}]/g, '')
-  return norm(userAnswer) === norm(correctAnswer) || userAnswer.trim().length > 5
+  return norm(userAnswer) === norm(correctAnswer)
 }
 
 // ─── PUBLIC SERVICE ─────────────────────────────────────────────────────────

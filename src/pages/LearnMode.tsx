@@ -178,8 +178,38 @@ interface PhaseContentProps {
   isLast: boolean
 }
 
+/**
+ * Parses a workedExample string into individual numbered steps.
+ * Lines starting with "1. ", "2. " etc. begin a new step;
+ * continuation lines are appended to the current step.
+ */
+function parseSteps(text: string): string[] {
+  const lines = text.split('\n')
+  const steps: string[] = []
+  let current = ''
+  for (const line of lines) {
+    const m = line.match(/^\s*\d+\.\s+(.+)/)
+    if (m) {
+      if (current) steps.push(current.trim())
+      current = m[1]
+    } else if (current && line.trim()) {
+      current += ' ' + line.trim()
+    }
+  }
+  if (current) steps.push(current.trim())
+  return steps
+}
+
 function PhaseContent({ phase, content, skillLabel, hintIndex, onShowHint, articleAnswer, onArticleChange, onAdvance, isLast }: PhaseContentProps) {
   const sectionClass = 'bg-[#1e293b] border border-[#334155] rounded-2xl p-6 mb-4'
+
+  // Overview: split off the first sentence as the "core idea" callout
+  const overviewMatch = content.overview.match(/^([\s\S]+?[.!?])\s*([\s\S]*)$/)
+  const overviewFirst = overviewMatch ? overviewMatch[1].trim() : content.overview
+  const overviewRest  = overviewMatch ? overviewMatch[2].trim() : ''
+
+  // Expert Modeling: parse numbered steps from workedExample
+  const modelingSteps = parseSteps(content.workedExample)
 
   return (
     <div>
@@ -189,7 +219,14 @@ function PhaseContent({ phase, content, skillLabel, hintIndex, onShowHint, artic
             <Compass size={18} className="text-blue-400" />
             <h2 className="text-white font-semibold">Global Overview — {skillLabel}</h2>
           </div>
-          <div className="space-y-1"><ContentRenderer content={content.overview} className="text-[#cbd5e1] leading-relaxed" /></div>
+          {/* Core idea callout */}
+          <div className="bg-blue-950/30 border border-blue-500/20 rounded-xl p-4 mb-4">
+            <p className="text-blue-400 text-xs uppercase tracking-widest font-semibold mb-2">Core Idea</p>
+            <ContentRenderer content={overviewFirst} className="text-blue-100 font-medium leading-relaxed" />
+          </div>
+          {overviewRest && (
+            <ContentRenderer content={overviewRest} className="text-[#cbd5e1] leading-relaxed" />
+          )}
         </div>
       )}
 
@@ -199,14 +236,32 @@ function PhaseContent({ phase, content, skillLabel, hintIndex, onShowHint, artic
             <Eye size={18} className="text-purple-400" />
             <h2 className="text-white font-semibold">Expert Modeling</h2>
           </div>
-          <div className="space-y-1 mb-4"><ContentRenderer content={content.workedExample} className="text-[#cbd5e1] leading-relaxed" /></div>
+          {/* Numbered step cards */}
+          {modelingSteps.length > 0 ? (
+            <div className="space-y-3 mb-4">
+              {modelingSteps.map((step, i) => (
+                <div key={i} className="flex gap-3 items-start bg-[#0f172a] border border-[#334155] rounded-xl p-4">
+                  <div className="shrink-0 w-7 h-7 rounded-full bg-purple-600/20 border border-purple-500/30 flex items-center justify-center">
+                    <span className="text-purple-400 text-xs font-bold">{i + 1}</span>
+                  </div>
+                  <div className="flex-1">
+                    <ContentRenderer content={step} className="text-[#cbd5e1] leading-relaxed" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-1 mb-4">
+              <ContentRenderer content={content.workedExample} className="text-[#cbd5e1] leading-relaxed" />
+            </div>
+          )}
           <div className="border-t border-[#334155] pt-4">
             <p className="text-[#64748b] text-xs uppercase tracking-widest mb-3">Expert annotations</p>
             <ul className="space-y-2">
               {content.expertAnnotations.map((ann, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-[#94a3b8]">
                   <span className="text-purple-400 mt-0.5">◆</span>
-                  {ann}
+                  <ContentRenderer content={ann} inline className="leading-relaxed" />
                 </li>
               ))}
             </ul>
@@ -223,8 +278,11 @@ function PhaseContent({ phase, content, skillLabel, hintIndex, onShowHint, artic
           <p className="text-[#94a3b8] text-sm mb-4">Work through a practice problem. Reveal hints one at a time.</p>
           <div className="space-y-3">
             {content.coachingHints.slice(0, hintIndex + 1).map((hint, i) => (
-              <div key={i} className="bg-amber-950/20 border border-amber-500/20 rounded-xl p-4">
-                <p className="text-amber-300 text-sm">{hint}</p>
+              <div key={i} className="flex gap-3 items-start bg-amber-950/20 border border-amber-500/20 rounded-xl p-4">
+                <div className="shrink-0 w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+                  <span className="text-amber-400 text-xs font-bold">{i + 1}</span>
+                </div>
+                <p className="text-amber-300 text-sm leading-relaxed">{hint}</p>
               </div>
             ))}
           </div>
@@ -233,7 +291,7 @@ function PhaseContent({ phase, content, skillLabel, hintIndex, onShowHint, artic
               onClick={onShowHint}
               className="mt-3 text-amber-400 hover:text-amber-300 text-sm border border-amber-500/30 hover:border-amber-500/50 px-4 py-2 rounded-xl transition-colors"
             >
-              Show next hint
+              Show next hint →
             </button>
           )}
         </div>

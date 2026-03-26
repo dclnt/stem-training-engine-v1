@@ -1,16 +1,18 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { SkillGraph, SkillNode, SessionResult, MasteryRecord } from '../types'
+import type { SkillGraph, SkillNode, SessionResult, MasteryRecord, AppSettings, DepthLevel } from '../types'
 
 interface AppState {
   graphs: SkillGraph[]
   activeGraphId: string | null
   sessionHistory: SessionResult[]
   activeSkillId: string | null
+  appSettings: AppSettings
 
   addGraph: (graph: SkillGraph) => void
   setActiveGraph: (id: string) => void
   setActiveSkill: (id: string | null) => void
+  setDepthLevel: (level: DepthLevel) => void
   recordSessionResult: (result: SessionResult) => void
   updateSkillStatus: (graphId: string, skillId: string, updates: Partial<SkillNode>) => void
   getActiveGraph: () => SkillGraph | null
@@ -28,6 +30,7 @@ export const useAppStore = create<AppState>()(
       activeGraphId: null,
       sessionHistory: [],
       activeSkillId: null,
+      appSettings: { depthLevel: 'intermediate' },
 
       addGraph: (graph) =>
         // Replace the entire graphs array — each new upload is a fresh session.
@@ -37,6 +40,8 @@ export const useAppStore = create<AppState>()(
       setActiveGraph: (id) => set({ activeGraphId: id, activeSkillId: null }),
 
       setActiveSkill: (id) => set({ activeSkillId: id }),
+
+      setDepthLevel: (level) => set(s => ({ appSettings: { ...s.appSettings, depthLevel: level } })),
 
       removeGraph: (id) =>
         set(s => ({

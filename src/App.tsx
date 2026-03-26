@@ -5,6 +5,7 @@ import SkillGraphPage from './pages/SkillGraphPage'
 import LearnMode from './pages/LearnMode'
 import DrillMode from './pages/DrillMode'
 import AdvanceMode from './pages/AdvanceMode'
+import ForceHanonMode from './pages/ForceHanonMode'
 import ProgressPage from './pages/ProgressPage'
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="/session/learn" element={<LearnMode />} />
           <Route path="/session/drill" element={<DrillMode />} />
           <Route path="/session/advance" element={<AdvanceMode />} />
+          <Route path="/session/force-hanon" element={<ForceHanonMode />} />
           <Route path="/progress" element={<ProgressPage />} />
         </Routes>
       </Layout>

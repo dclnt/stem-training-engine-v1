@@ -17,7 +17,7 @@ const PHASES: { key: CAPhase; label: string; icon: React.ReactNode; color: strin
 
 export default function LearnMode() {
   const navigate = useNavigate()
-  const { getActiveSkill, getActiveGraph, recordSessionResult } = useAppStore()
+  const { getActiveSkill, getActiveGraph, recordSessionResult, appSettings } = useAppStore()
   const skill = getActiveSkill()
   const graph = getActiveGraph()
 
@@ -41,7 +41,7 @@ export default function LearnMode() {
           graph.sourceContent ? `SOURCE EXCERPT (match this domain exactly):\n${graph.sourceContent.slice(0, 1200)}` : '',
         ].filter(Boolean).join('\n')
       : undefined
-    llmService.generateCAContent(skill, sourceContext)
+    llmService.generateCAContent(skill, sourceContext, appSettings?.depthLevel ?? 'intermediate')
       .then(c => { setCaContent(c); setLoading(false) })
       .catch(err => {
         const msg = err instanceof Error ? err.message : ''

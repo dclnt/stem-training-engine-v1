@@ -3,7 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { PlayCircle, Link, FileText, Upload, Zap, Loader, Image } from 'lucide-react'
 import { llmService } from '../services/llmService'
 import { useAppStore } from '../store/useAppStore'
-import type { SourceInput } from '../types'
+import type { SourceInput, DepthLevel } from '../types'
+
+const DEPTH_OPTIONS: { key: DepthLevel; label: string; desc: string; color: string }[] = [
+  { key: 'beginner',     label: 'Beginner',     desc: "I'm new to this topic",    color: 'text-emerald-400 border-emerald-500/40 bg-emerald-950/20' },
+  { key: 'intermediate', label: 'Intermediate', desc: 'I have some background',   color: 'text-blue-400 border-blue-500/40 bg-blue-950/20' },
+  { key: 'advanced',     label: 'Advanced',     desc: 'I know the domain well',   color: 'text-amber-400 border-amber-500/40 bg-amber-950/20' },
+  { key: 'graduate',     label: 'Graduate',     desc: 'Expert-level training',    color: 'text-purple-400 border-purple-500/40 bg-purple-950/20' },
+]
 
 type TabKey = 'youtube' | 'url' | 'file' | 'text'
 
@@ -24,7 +31,11 @@ export default function HomePage() {
 
   const fileRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
-  const addGraph = useAppStore(s => s.addGraph)
+  const { addGraph, appSettings, setDepthLevel } = useAppStore(s => ({
+    addGraph: s.addGraph,
+    appSettings: s.appSettings,
+    setDepthLevel: s.setDepthLevel,
+  }))
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; placeholder: string }[] = [
     { key: 'youtube', label: 'YouTube', icon: <PlayCircle size={16} />, placeholder: 'https://youtube.com/watch?v=...' },
@@ -46,7 +57,7 @@ export default function HomePage() {
         filename,
         fileContent: tab === 'file' ? fileContent : (tab === 'text' ? value : undefined),
       }
-      const graph = await llmService.generateSkillGraph(source)
+      const graph = await llmService.generateSkillGraph(source, appSettings.depthLevel)
       addGraph(graph)
       navigate('/graph')
     } catch (err) {
@@ -239,6 +250,27 @@ export default function HomePage() {
           )}
 
           {error && <p className="text-red-400 text-sm mt-3">{error}</p>}
+
+          {/* Depth Level selector */}
+          <div className="mt-5">
+            <p className="text-[#64748b] text-xs uppercase tracking-widest mb-2">Depth Level</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {DEPTH_OPTIONS.map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => setDepthLevel(opt.key)}
+                  className={`text-left p-3 rounded-xl border transition-all ${
+                    appSettings.depthLevel === opt.key
+                      ? opt.color
+                      : 'border-[#334155] text-[#64748b] hover:text-[#94a3b8] hover:border-[#475569]'
+                  }`}
+                >
+                  <p className="font-medium text-sm">{opt.label}</p>
+                  <p className="text-xs mt-0.5 opacity-70">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
 
           <button
             onClick={handleGenerate}

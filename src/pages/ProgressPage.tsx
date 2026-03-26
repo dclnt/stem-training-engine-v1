@@ -29,8 +29,8 @@ export default function ProgressPage() {
     ? sessionHistory.reduce((s, r) => s + r.accuracy, 0) / sessionHistory.length
     : 0
 
-  const modeColors = { learn: 'text-purple-400', drill: 'text-amber-400', advance: 'text-emerald-400' }
-  const modeIcons = { learn: BookOpen, drill: Zap, advance: TrendingUp }
+  const modeColors = { learn: 'text-purple-400', drill: 'text-amber-400', advance: 'text-emerald-400', force_hanon: 'text-amber-300' }
+  const modeIcons = { learn: BookOpen, drill: Zap, advance: TrendingUp, force_hanon: Zap }
 
   return (
     <div className="min-h-screen bg-[#0f172a] px-4 py-8">

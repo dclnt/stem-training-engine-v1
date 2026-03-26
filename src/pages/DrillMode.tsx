@@ -5,6 +5,8 @@ import { llmService } from '../services/llmService'
 import { useAppStore } from '../store/useAppStore'
 import type { DrillSet, DrillProblem } from '../types'
 import ContentRenderer from '../components/ContentRenderer'
+import TempoIndicator from '../components/TempoIndicator'
+import SessionSummary from '../components/SessionSummary'
 
 type DrillPhase = 'isolated' | 'speed_ramp' | 'chaining' | 'results'
 type TempoStage = 'untimed' | 'comfortable' | 'target' | 'fluency'
@@ -27,7 +29,7 @@ interface Answer {
 
 export default function DrillMode() {
   const navigate = useNavigate()
-  const { getActiveSkill, getActiveGraph, recordSessionResult } = useAppStore()
+  const { getActiveSkill, getActiveGraph, recordSessionResult, appSettings } = useAppStore()
   const skill = getActiveSkill()
   const graph = getActiveGraph()
 
@@ -61,7 +63,7 @@ export default function DrillMode() {
       `SUMMARY: ${graph.sourceSummary}`,
       graph.sourceContent ? `SOURCE EXCERPT (match this domain exactly):\n${graph.sourceContent.slice(0, 1200)}` : '',
     ].filter(Boolean).join('\n')
-    llmService.generateDrillSet(skill, prevNode, sourceContext)
+    llmService.generateDrillSet(skill, prevNode, sourceContext, appSettings?.depthLevel ?? 'intermediate')
       .then(ds => { setDrillSet(ds); setLoading(false) })
       .catch(err => {
         const msg = err instanceof Error ? err.message : ''
@@ -202,39 +204,38 @@ export default function DrillMode() {
   }
 
   if (phase === 'results' && sessionResult) {
+    const correctCount = sessionAnswers.filter(a => llmService.evaluateAnswer(a.userAnswer, a.problem.answer)).length
+    const nextNode = graph?.nodes.find(n => n.prerequisites.includes(skill.id) && n.status === 'available')
     return (
       <div className="min-h-screen bg-[#0f172a] flex items-center justify-center px-4">
-        <div className="max-w-md w-full">
-          <div className={`rounded-2xl border p-6 mb-4 ${sessionResult.gatesPassed ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-amber-950/20 border-amber-500/30'}`}>
-            {sessionResult.gatesPassed
-              ? <CheckCircle size={40} className="text-emerald-400 mx-auto mb-3" />
-              : <XCircle size={40} className="text-amber-400 mx-auto mb-3" />}
-            <h2 className="text-white text-xl font-bold text-center mb-1">
-              {sessionResult.gatesPassed ? 'Mastery Gates Passed!' : 'Keep Drilling'}
-            </h2>
-            <p className="text-[#94a3b8] text-sm text-center mb-4">
-              {sessionResult.gatesPassed
-                ? 'Both accuracy ≥90% and time ≤ SCT achieved. This skill is mastered.'
-                : 'Practice more to reach both accuracy and speed thresholds.'}
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-[#0f172a] rounded-xl p-3 text-center">
-                <p className="text-2xl font-bold text-white">{Math.round(sessionResult.accuracy * 100)}%</p>
-                <p className="text-[#64748b] text-xs">Accuracy</p>
-                <p className="text-xs mt-1">{sessionResult.accuracy >= 0.9 ? <span className="text-emerald-400">✓ Gate passed</span> : <span className="text-red-400">✗ Need ≥90%</span>}</p>
-              </div>
-              <div className="bg-[#0f172a] rounded-xl p-3 text-center">
-                <p className="text-2xl font-bold text-white">{sessionResult.avgTime.toFixed(1)}s</p>
-                <p className="text-[#64748b] text-xs">Avg. Time</p>
-                <p className="text-xs mt-1">{sessionResult.avgTime <= drillSet.targetSCT ? <span className="text-emerald-400">✓ Gate passed</span> : <span className="text-red-400">✗ Need ≤{drillSet.targetSCT}s</span>}</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <button onClick={() => navigate('/graph')} className="flex-1 border border-[#334155] text-[#94a3b8] hover:text-white py-2.5 rounded-xl text-sm transition-colors">Back to Graph</button>
-            <button onClick={() => { setPhase('isolated'); setTempoStageIndex(0); setTempoStage('untimed'); setProblemIndex(0); setAnswers([]); setSessionAnswers([]); setSessionResult(null) }} className="flex-1 bg-amber-600 hover:bg-amber-500 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">Drill Again</button>
-          </div>
-        </div>
+        <SessionSummary
+          skillLabel={skill.label}
+          accuracy={sessionResult.accuracy}
+          avgSolveTime={sessionResult.avgTime}
+          targetSCT={drillSet.targetSCT}
+          gatesPassed={sessionResult.gatesPassed}
+          accuracyGate={sessionResult.accuracy >= 0.9}
+          timeGate={sessionResult.avgTime <= drillSet.targetSCT}
+          totalProblems={sessionAnswers.length}
+          correctCount={correctCount}
+          mode="drill"
+          nextSkillLabel={nextNode?.label}
+          onAction={action => {
+            if (action === 'graph') navigate('/graph')
+            else if (action === 'retry') {
+              setPhase('isolated')
+              setTempoStageIndex(0)
+              setTempoStage('untimed')
+              setProblemIndex(0)
+              setAnswers([])
+              setSessionAnswers([])
+              setSessionResult(null)
+            } else if (action === 'next' && nextNode) {
+              useAppStore.getState().setActiveSkill(nextNode.id)
+              navigate('/session/drill')
+            }
+          }}
+        />
       </div>
     )
   }
@@ -308,9 +309,13 @@ export default function DrillMode() {
               </div>
             </div>
 
-            <div className="bg-[#0f172a] rounded-xl p-4 mb-5">
+            <div className="bg-[#0f172a] rounded-xl p-4 mb-1">
               <ContentRenderer content={currentProblem.prompt} className="text-white font-medium" />
             </div>
+            <TempoIndicator
+              elapsedMs={timeElapsed}
+              targetMs={timeLimit ? timeLimit * 1000 : 0}
+            />
 
             {!showAnswer ? (
               <div className="flex gap-3">

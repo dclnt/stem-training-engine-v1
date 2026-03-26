@@ -4,6 +4,7 @@ import { TrendingUp, ArrowLeft, Timer, CheckCircle, XCircle, Loader, AlertTriang
 import { llmService } from '../services/llmService'
 import { useAppStore } from '../store/useAppStore'
 import type { DrillProblem, DrillSet } from '../types'
+import SessionSummary from '../components/SessionSummary'
 
 type AdvancePhase = 'diagnostic' | 'assessment' | 'passed' | 'failed' | 'regressing'
 
@@ -11,7 +12,7 @@ interface Answer { problem: DrillProblem; userAnswer: string; timeMs: number; co
 
 export default function AdvanceMode() {
   const navigate = useNavigate()
-  const { getActiveSkill, getActiveGraph, recordSessionResult, traceRegression, setActiveSkill } = useAppStore()
+  const { getActiveSkill, getActiveGraph, recordSessionResult, traceRegression, setActiveSkill, appSettings } = useAppStore()
   const skill = getActiveSkill()
   const graph = getActiveGraph()
 
@@ -34,7 +35,7 @@ export default function AdvanceMode() {
       ? graph.nodes.find(n => n.id === skill.prerequisites[0]) ?? null
       : null
     const sourceContext = graph ? `${graph.sourceTitle}: ${graph.sourceSummary}` : undefined
-    llmService.generateDrillSet(skill, prevNode, sourceContext).then(ds => {
+    llmService.generateDrillSet(skill, prevNode, sourceContext, appSettings?.depthLevel ?? 'intermediate').then(ds => {
       setDrillSet(ds)
       setLoading(false)
       startTimer()
@@ -173,89 +174,44 @@ export default function AdvanceMode() {
     )
   }
 
-  if (phase === 'passed') {
+  if (phase === 'passed' || phase === 'failed') {
+    const avgTime = answers.length > 0 ? answers.reduce((s, a) => s + a.timeMs, 0) / answers.length / 1000 : 0
+    const accuracyGate = accuracy >= 0.9
+    const timeGate = avgTime <= drillSet.targetSCT
     const nextNode = graph.nodes.find(n => n.prerequisites.includes(skill.id) && n.status === 'available')
-    return (
-      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center px-4">
-        <div className="max-w-md w-full text-center">
-          <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-2xl p-8 mb-4">
-            <CheckCircle size={48} className="text-emerald-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-white mb-2">Both Gates Passed!</h2>
-            <p className="text-[#94a3b8] text-sm mb-4"><strong className="text-emerald-400">{skill.label}</strong> is now mastered. You've unlocked the next skill(s) in the graph.</p>
-            <div className="grid grid-cols-2 gap-3 mb-2">
-              <div className="bg-[#0f172a] rounded-xl p-3">
-                <p className="text-2xl font-bold text-white">{Math.round(accuracy * 100)}%</p>
-                <p className="text-[#64748b] text-xs">Accuracy</p>
-              </div>
-              <div className="bg-[#0f172a] rounded-xl p-3">
-                <p className="text-2xl font-bold text-white">{(answers.reduce((s, a) => s + a.timeMs, 0) / answers.length / 1000).toFixed(1)}s</p>
-                <p className="text-[#64748b] text-xs">Avg. Time</p>
-              </div>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <button onClick={() => navigate('/graph')} className="flex-1 border border-[#334155] text-[#94a3b8] hover:text-white py-2.5 rounded-xl text-sm transition-colors">View Graph</button>
-            {nextNode && (
-              <button
-                onClick={() => { setActiveSkill(nextNode.id); navigate('/session/advance') }}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
-              >
-                Next Skill
-                <ArrowRight size={14} />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (phase === 'failed') {
-    const failAccuracy = accuracy < 0.9
-    const failSpeed = answers.length > 0 && answers.reduce((s, a) => s + a.timeMs, 0) / answers.length / 1000 > drillSet.targetSCT
     const regrNode = regressionTarget ? graph.nodes.find(n => n.id === regressionTarget) : null
     return (
-      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center px-4">
-        <div className="max-w-md w-full">
-          <div className="bg-amber-950/20 border border-amber-500/30 rounded-2xl p-6 mb-4">
-            <AlertTriangle size={36} className="text-amber-400 mx-auto mb-3" />
-            <h2 className="text-xl font-bold text-white text-center mb-2">Gates Not Passed Yet</h2>
-            <div className="space-y-2 mb-4">
-              <div className={`flex items-center justify-between p-3 rounded-xl ${failAccuracy ? 'bg-red-950/20 border border-red-500/20' : 'bg-emerald-950/20 border border-emerald-500/20'}`}>
-                <span className="text-sm text-[#94a3b8]">Accuracy gate (≥90%)</span>
-                <span className={`font-bold text-sm ${failAccuracy ? 'text-red-400' : 'text-emerald-400'}`}>{Math.round(accuracy * 100)}% {failAccuracy ? '✗' : '✓'}</span>
-              </div>
-              <div className={`flex items-center justify-between p-3 rounded-xl ${failSpeed ? 'bg-red-950/20 border border-red-500/20' : 'bg-emerald-950/20 border border-emerald-500/20'}`}>
-                <span className="text-sm text-[#94a3b8]">Speed gate (≤{drillSet.targetSCT}s)</span>
-                <span className={`font-bold text-sm ${failSpeed ? 'text-red-400' : 'text-emerald-400'}`}>{answers.length > 0 ? (answers.reduce((s, a) => s + a.timeMs, 0) / answers.length / 1000).toFixed(1) : '—'}s {failSpeed ? '✗' : '✓'}</span>
-              </div>
-            </div>
-            {regrNode && (
-              <div className="bg-blue-950/30 border border-blue-500/20 rounded-xl p-3 text-sm">
-                <p className="text-blue-400 font-medium mb-1">Adaptive Regression Detected</p>
-                <p className="text-[#94a3b8]">Prerequisite gap found: <strong className="text-white">{regrNode.label}</strong>. Drill this first to close the gap.</p>
-              </div>
-            )}
+      <div className="min-h-screen bg-[#0f172a] flex flex-col items-center justify-center px-4 gap-4">
+        <SessionSummary
+          skillLabel={skill.label}
+          accuracy={accuracy}
+          avgSolveTime={avgTime}
+          targetSCT={drillSet.targetSCT}
+          gatesPassed={phase === 'passed'}
+          accuracyGate={accuracyGate}
+          timeGate={timeGate}
+          totalProblems={answers.length}
+          correctCount={answers.filter(a => a.correct).length}
+          mode="advance"
+          nextSkillLabel={nextNode?.label}
+          onAction={action => {
+            if (action === 'graph') navigate('/graph')
+            else if (action === 'retry') { setPhase('diagnostic'); setProblemIndex(0); setAnswers([]) }
+            else if (action === 'next' && nextNode) { setActiveSkill(nextNode.id); navigate('/session/advance') }
+          }}
+        />
+        {regrNode && (
+          <div className="max-w-md w-full bg-blue-950/30 border border-blue-500/20 rounded-xl p-4 text-sm">
+            <p className="text-blue-400 font-medium mb-1">Adaptive Regression Detected</p>
+            <p className="text-[#94a3b8] mb-3">Prerequisite gap: <strong className="text-white">{regrNode.label}</strong>. Drill this first.</p>
+            <button
+              onClick={() => { setActiveSkill(regrNode.id); navigate('/session/drill') }}
+              className="bg-amber-600 hover:bg-amber-500 text-white text-sm px-4 py-2 rounded-xl transition-colors"
+            >
+              Drill {regrNode.label}
+            </button>
           </div>
-          <div className="flex gap-3">
-            <button onClick={() => navigate('/graph')} className="flex-1 border border-[#334155] text-[#94a3b8] hover:text-white py-2.5 rounded-xl text-sm transition-colors">Back to Graph</button>
-            {regrNode ? (
-              <button
-                onClick={() => { setActiveSkill(regrNode.id); navigate('/session/drill') }}
-                className="flex-1 bg-amber-600 hover:bg-amber-500 text-white py-2.5 rounded-xl text-sm font-medium transition-colors"
-              >
-                Drill {regrNode.label}
-              </button>
-            ) : (
-              <button
-                onClick={() => { setPhase('diagnostic'); setProblemIndex(0); setAnswers([]) }}
-                className="flex-1 bg-amber-600 hover:bg-amber-500 text-white py-2.5 rounded-xl text-sm font-medium transition-colors"
-              >
-                Try Again
-              </button>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     )
   }

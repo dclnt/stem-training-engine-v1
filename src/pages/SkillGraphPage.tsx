@@ -97,6 +97,14 @@ export default function SkillGraphPage() {
           </div>
           <div className="flex gap-2">
             <button
+              onClick={() => navigate('/session/force-hanon')}
+              className="text-amber-400 hover:text-amber-300 border border-amber-500/30 hover:border-amber-500/60 px-3 py-2 rounded-xl text-sm transition-colors flex items-center gap-1.5"
+              title="Force Hanon — bypass progression and drill any skill"
+            >
+              <Zap size={14} />
+              Force Hanon
+            </button>
+            <button
               onClick={() => navigate('/')}
               className="text-[#94a3b8] hover:text-white border border-[#334155] hover:border-[#475569] px-3 py-2 rounded-xl text-sm transition-colors flex items-center gap-1.5"
             >

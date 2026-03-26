@@ -1,5 +1,10 @@
 export type SkillStatus = 'locked' | 'available' | 'in_progress' | 'mastered'
-export type SessionMode = 'learn' | 'drill' | 'advance'
+export type SessionMode = 'learn' | 'drill' | 'advance' | 'force_hanon'
+export type DepthLevel = 'beginner' | 'intermediate' | 'advanced' | 'graduate'
+
+export interface AppSettings {
+  depthLevel: DepthLevel
+}
 export type DrillPhase = 'isolated' | 'speed_ramp' | 'chaining' | 'variation'
 export type CAPhase =
   | 'overview'

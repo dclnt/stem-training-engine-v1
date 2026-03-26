@@ -7,6 +7,7 @@ import type {
   DrillProblem,
   SessionResult,
   SourceInput,
+  DepthLevel,
 } from '../types'
 
 // ─── Anthropic client (browser-safe for personal/demo use) ─────────────────
@@ -333,7 +334,13 @@ Rules:
 - Generate 4–8 nodes ordered from foundational (depth 0) to advanced.
 - Prerequisites must reference only ids that already appear earlier in the nodes array.
 - estimatedSCT should reflect real cognitive load: 20–30s for recall, 60–120s for multi-step problems.
-- Keep node ids short and unique (e.g. "deriv-def", "chain-rule", "py-functions").`
+- Keep node ids short and unique (e.g. "deriv-def", "chain-rule", "py-functions").
+
+DEPTH CALIBRATION — apply based on current depth level:
+- beginner: 4 nodes max. estimatedSCT generous (multiply standard estimates by 2.0). Descriptions use plain language and concrete analogies. Avoid jargon in labels and descriptions.
+- intermediate: 5–6 nodes. Standard SCT. Balanced language with some domain terminology.
+- advanced: 7 nodes. estimatedSCT tight (multiply by 0.85). Technical terminology expected throughout. Tighter prerequisite chains.
+- graduate: 8 nodes. estimatedSCT very tight (multiply by 0.7). Assume deep domain knowledge. Abstract, research-level framing in descriptions.`
 
 const DRILL_SET_SYSTEM = `You are a drill problem designer for any academic or professional subject, following the Kumon + Hanon spaced-repetition method.
 
@@ -373,7 +380,13 @@ Formatting rules — choose the format that matches the SOURCE DOMAIN:
 - Math/Physics source: use LaTeX in $...$ for inline or $$...$$ for block.
 - Humanities/Science/other: use plain English prose with domain-accurate terminology.
 - Cover all 5 variationTypes across the 5 problems (one each): standard, symbolic, numeric, inverse, applied.
-- Return ONLY valid JSON. No markdown wrapper. No explanations outside the JSON.`
+- Return ONLY valid JSON. No markdown wrapper. No explanations outside the JSON.
+
+DEPTH CALIBRATION — adjust targetSCT and problem difficulty based on current depth:
+- beginner: targetSCT = estimatedSCT × 1.8 (generous — build accuracy first). Simple problem wording, single-step solutions.
+- intermediate: targetSCT = estimatedSCT × 1.2. Standard difficulty.
+- advanced: targetSCT = estimatedSCT × 0.9. Higher cognitive demand problems; multi-step where appropriate.
+- graduate: targetSCT = estimatedSCT × 0.7 (near-expert speed expected). Graduate-level problem framing; abstract or edge-case scenarios.`
 
 const CA_CONTENT_SYSTEM = `You are an expert educator using the Cognitive Apprenticeship framework for any academic or professional subject.
 
@@ -415,7 +428,13 @@ Field-specific rules (strict):
 - articulationPrompt: One clear question. Max 15 words.
 - reflectionComparison: Max 3 sentences. Compare the learner's likely approach to the expert approach.
 - explorationSeed: Exactly 3 bullet items (- challenge). Each challenge is ONE short line. No sub-bullets.
-- Return ONLY valid JSON. No markdown wrapper. No explanations outside the JSON.`
+- Return ONLY valid JSON. No markdown wrapper. No explanations outside the JSON.
+
+DEPTH CALIBRATION — adjust content complexity based on current depth:
+- beginner: Use concrete, everyday analogies in overview. Fully scaffolded workedExample steps with no assumed vocabulary. coachingHints are gentle, step-by-step.
+- intermediate: Balanced. Some domain terminology with brief inline clarification where needed.
+- advanced: Technical vocabulary throughout overview and worked example. Skip fundamentals. Terse, expert-facing language.
+- graduate: Assume full expert context. Research-level framing. No scaffolding language. Overview may reference advanced theoretical considerations.`
 
 function extractJSON(text: string): string {
   // IMPORTANT: Try outermost {…} FIRST.
@@ -459,7 +478,7 @@ function evaluateAnswer(userAnswer: string, correctAnswer: string): boolean {
 // ─── PUBLIC SERVICE ─────────────────────────────────────────────────────────
 
 export const llmService = {
-  async generateSkillGraph(source: SourceInput): Promise<SkillGraph> {
+  async generateSkillGraph(source: SourceInput, depthLevel: DepthLevel = 'intermediate'): Promise<SkillGraph> {
     // No API key → hard stop. We never generate a wrong-subject graph as fallback.
     if (!HAS_API_KEY) {
       throw new Error('API_KEY_MISSING')
@@ -468,9 +487,9 @@ export const llmService = {
     const sourceContent = (source.fileContent ?? source.value ?? '').slice(0, 2000)
     try {
       const content = source.fileContent ?? source.value ?? ''
-      const userPrompt = content.length > 8000
+      const userPrompt = `CURRENT DEPTH LEVEL: ${depthLevel}\n\n` + (content.length > 8000
         ? content.slice(0, 8000) + '\n\n[Content truncated — generate graph from what you can see above]'
-        : content || `Source: ${source.filename ?? source.value ?? 'unknown'}`
+        : content || `Source: ${source.filename ?? source.value ?? 'unknown'}`)
       const raw = await callClaude(SKILL_GRAPH_SYSTEM, userPrompt)
       const parsed = JSON.parse(extractJSON(raw))
       return {
@@ -492,7 +511,7 @@ export const llmService = {
     }
   },
 
-  async generateCAContent(skill: SkillNode, sourceContext?: string): Promise<CAContent> {
+  async generateCAContent(skill: SkillNode, sourceContext?: string, depthLevel: DepthLevel = 'intermediate'): Promise<CAContent> {
     // No API key → hard stop. We never serve a generic/wrong-subject lesson as fallback.
     if (!HAS_API_KEY) {
       throw new Error('API_KEY_MISSING')
@@ -501,7 +520,7 @@ export const llmService = {
       const domainBlock = sourceContext
         ? `═══ SOURCE DOMAIN LOCK ═══\n${sourceContext}\n══════════════════════════\n\n`
         : ''
-      const userPrompt = `${domainBlock}Skill: "${skill.label}"\nDescription: ${skill.description}\nPrerequisites: ${skill.prerequisites.join(', ') || 'none'}\n\nGenerate Cognitive Apprenticeship content EXCLUSIVELY about "${skill.label}" within the subject domain described in the SOURCE DOMAIN LOCK above. Every example, every worked step, every hint MUST come from that domain. Do NOT introduce concepts, symbols, or examples from any other domain.`
+      const userPrompt = `CURRENT DEPTH LEVEL: ${depthLevel}\n\n${domainBlock}Skill: "${skill.label}"\nDescription: ${skill.description}\nPrerequisites: ${skill.prerequisites.join(', ') || 'none'}\n\nGenerate Cognitive Apprenticeship content EXCLUSIVELY about "${skill.label}" within the subject domain described in the SOURCE DOMAIN LOCK above. Every example, every worked step, every hint MUST come from that domain. Do NOT introduce concepts, symbols, or examples from any other domain.`
       const raw = await callClaude(CA_CONTENT_SYSTEM, userPrompt)
       const parsed = JSON.parse(extractJSON(raw))
       return parsed as CAContent
@@ -511,7 +530,7 @@ export const llmService = {
     }
   },
 
-  async generateDrillSet(skill: SkillNode, previousSkill: SkillNode | null, sourceContext?: string): Promise<DrillSet> {
+  async generateDrillSet(skill: SkillNode, previousSkill: SkillNode | null, sourceContext?: string, depthLevel: DepthLevel = 'intermediate'): Promise<DrillSet> {
     // No API key → hard stop. We never serve wrong-subject drill problems as fallback.
     if (!HAS_API_KEY) {
       throw new Error('API_KEY_MISSING')
@@ -520,7 +539,7 @@ export const llmService = {
       const domainBlock = sourceContext
         ? `═══ SOURCE DOMAIN LOCK ═══\n${sourceContext}\n══════════════════════════\n\n`
         : ''
-      const userPrompt = `${domainBlock}Skill id: "${skill.id}"\nSkill label: "${skill.label}"\nDescription: ${skill.description}\nestimatedSCT: ${skill.estimatedSCT} seconds\n\nAll 5 drill problems MUST test "${skill.label}" EXCLUSIVELY within the subject domain in the SOURCE DOMAIN LOCK above. Use the domain's native format (code blocks for programming, LaTeX for math, prose for humanities/science). Do NOT generate problems from any other domain — a calculus problem in a JavaScript skill = wrong, a physics problem in a history skill = wrong.`
+      const userPrompt = `CURRENT DEPTH LEVEL: ${depthLevel}\n\n${domainBlock}Skill id: "${skill.id}"\nSkill label: "${skill.label}"\nDescription: ${skill.description}\nestimatedSCT: ${skill.estimatedSCT} seconds\n\nAll 5 drill problems MUST test "${skill.label}" EXCLUSIVELY within the subject domain in the SOURCE DOMAIN LOCK above. Use the domain's native format (code blocks for programming, LaTeX for math, prose for humanities/science). Do NOT generate problems from any other domain — a calculus problem in a JavaScript skill = wrong, a physics problem in a history skill = wrong.`
       const raw = await callClaude(DRILL_SET_SYSTEM, userPrompt)
       const parsed = JSON.parse(extractJSON(raw))
       const problems: DrillProblem[] = (parsed.problems ?? []).map((p: DrillProblem) => ({

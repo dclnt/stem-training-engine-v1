@@ -10,12 +10,23 @@ import type {
   DepthLevel,
 } from '../types'
 
-// ─── Anthropic client (browser-safe for personal/demo use) ─────────────────
-const client = new Anthropic({
-  apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY ?? '',
-  dangerouslyAllowBrowser: true,
-})
+// ─── Anthropic client (lazy — avoids SDK constructor throw on missing key) ──
+// The Anthropic SDK throws synchronously when apiKey is empty, which would
+// crash the entire React app at module-load time before any UI renders.
+// Creating the client on first use means the error surfaces inside an async
+// try/catch and the app falls back to mock data instead of going white.
 const HAS_API_KEY = Boolean(import.meta.env.VITE_ANTHROPIC_API_KEY)
+let _anthropicClient: Anthropic | null = null
+function getClient(): Anthropic {
+  if (!_anthropicClient) {
+    if (!import.meta.env.VITE_ANTHROPIC_API_KEY) throw new Error('API_KEY_MISSING')
+    _anthropicClient = new Anthropic({
+      apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY,
+      dangerouslyAllowBrowser: true,
+    })
+  }
+  return _anthropicClient
+}
 
 function uid() {
   return Math.random().toString(36).slice(2, 10)
@@ -452,7 +463,7 @@ function extractJSON(text: string): string {
 }
 
 async function callClaude(system: string, user: string): Promise<string> {
-  const msg = await client.messages.create({
+  const msg = await getClient().messages.create({
     model: 'claude-sonnet-4-5',
     max_tokens: 4096,
     system,

@@ -31,11 +31,9 @@ export default function HomePage() {
 
   const fileRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
-  const { addGraph, appSettings, setDepthLevel } = useAppStore(s => ({
-    addGraph: s.addGraph,
-    appSettings: s.appSettings,
-    setDepthLevel: s.setDepthLevel,
-  }))
+  const addGraph = useAppStore(s => s.addGraph)
+  const appSettings = useAppStore(s => s.appSettings)
+  const setDepthLevel = useAppStore(s => s.setDepthLevel)
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode; placeholder: string }[] = [
     { key: 'youtube', label: 'YouTube', icon: <PlayCircle size={16} />, placeholder: 'https://youtube.com/watch?v=...' },
